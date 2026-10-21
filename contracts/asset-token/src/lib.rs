@@ -31,6 +31,9 @@ use soroban_sdk::{
     Env, String, Vec,
 };
 
+#[cfg(test)]
+mod test_rdj_allowance;
+
 /// Cross-contract client for the compliance contract. Only the method the asset
 /// token needs is declared here, decoupling the two contracts at build time.
 #[contractclient(name = "ComplianceClient")]
