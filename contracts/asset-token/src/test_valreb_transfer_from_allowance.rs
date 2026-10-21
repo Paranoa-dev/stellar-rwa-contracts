@@ -194,3 +194,41 @@ fn test_transfer_from_after_zero_approval_rejected() {
         .try_transfer_from(&c.spender, &c.owner, &c.to, &1)
         .is_err());
 }
+
+// ---- event emission (issue #543) ----
+
+/// A successful `transfer_from` emits the `transfer` event, which is the only
+/// state-changing record the call writes besides balances and allowance.
+/// `events().all()` reflects the latest invocation, so read it immediately.
+#[test]
+fn test_transfer_from_emits_transfer_event() {
+    let c = ctx();
+    c.token.transfer_from(&c.spender, &c.owner, &c.to, &30);
+    let events = c.env.events().all();
+    assert!(!events.events().is_empty());
+    assert_eq!(c.token.balance(&c.owner), 470);
+    assert_eq!(c.token.balance(&c.to), 30);
+}
+
+/// Each successful call emits on its own; a rejected call must not leave
+/// state behind.
+#[test]
+fn test_transfer_from_failed_call_changes_nothing() {
+    let c = ctx();
+    assert!(c
+        .token
+        .try_transfer_from(&c.spender, &c.owner, &c.to, &201)
+        .is_err());
+    assert_eq!(c.token.balance(&c.owner), 500);
+    assert_eq!(c.token.allowance(&c.owner, &c.spender), 200);
+}
+
+/// Note: `transfer_from` reports the allowance decrease only implicitly (no
+/// separate `approve` event); indexers can derive it from the `transfer`
+/// amount. Documented current behaviour.
+#[test]
+fn test_transfer_from_allowance_decrease_matches_amount() {
+    let c = ctx();
+    c.token.transfer_from(&c.spender, &c.owner, &c.to, &75);
+    assert_eq!(c.token.allowance(&c.owner, &c.spender), 125);
+}
