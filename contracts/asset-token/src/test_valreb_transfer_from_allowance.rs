@@ -143,3 +143,54 @@ fn test_transfer_from_requires_spender_auth() {
     // No mock_all_auths and not initialized: require_auth fails first.
     assert!(token.try_transfer_from(&a, &a, &a, &1).is_err());
 }
+
+// ---- zero / minimal input (issue #542) ----
+
+/// A zero amount is deliberately rejected with `InvalidAmount` (#5).
+#[test]
+#[should_panic(expected = "Error(Contract, #5)")]
+fn test_transfer_from_zero_amount_rejected() {
+    let c = ctx();
+    c.token.transfer_from(&c.spender, &c.owner, &c.to, &0);
+}
+
+/// A negative amount is rejected with `InvalidAmount` (#5).
+#[test]
+#[should_panic(expected = "Error(Contract, #5)")]
+fn test_transfer_from_negative_amount_rejected() {
+    let c = ctx();
+    c.token.transfer_from(&c.spender, &c.owner, &c.to, &-1);
+}
+
+/// A rejected zero-amount call changes no state.
+#[test]
+fn test_transfer_from_zero_amount_leaves_state_unchanged() {
+    let c = ctx();
+    assert!(c
+        .token
+        .try_transfer_from(&c.spender, &c.owner, &c.to, &0)
+        .is_err());
+    assert_eq!(c.token.balance(&c.owner), 500);
+    assert_eq!(c.token.balance(&c.to), 0);
+    assert_eq!(c.token.allowance(&c.owner, &c.spender), 200);
+}
+
+/// The minimal valid amount (1) succeeds and decrements the allowance by 1.
+#[test]
+fn test_transfer_from_minimum_amount_succeeds() {
+    let c = ctx();
+    c.token.transfer_from(&c.spender, &c.owner, &c.to, &1);
+    assert_eq!(c.token.balance(&c.to), 1);
+    assert_eq!(c.token.allowance(&c.owner, &c.spender), 199);
+}
+
+/// With an allowance of zero (cleared via approve(0)), even amount 1 fails.
+#[test]
+fn test_transfer_from_after_zero_approval_rejected() {
+    let c = ctx();
+    c.token.approve(&c.owner, &c.spender, &0, &0);
+    assert!(c
+        .token
+        .try_transfer_from(&c.spender, &c.owner, &c.to, &1)
+        .is_err());
+}
