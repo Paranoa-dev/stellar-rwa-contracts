@@ -93,3 +93,19 @@ fn test_allowance_expiry_boundary_inclusive() {
     env.ledger().set_sequence_number(exp + 1);
     assert_eq!(token.allowance(&admin, &spender), 0);
 }
+
+/// `allowance` makes no state change, so it must emit no event (matches its
+/// `# Events: None` doc). The state change that creates an allowance,
+/// `approve`, emits exactly one event.
+#[test]
+fn test_allowance_emits_no_event_but_approve_does() {
+    let (env, token, admin) = setup();
+    let spender = Address::generate(&env);
+
+    token.approve(&admin, &spender, &40, &(env.ledger().sequence() + 20));
+    // `events().all()` reflects only the most recent invocation.
+    assert_eq!(env.events().all().events().len(), 1);
+
+    assert_eq!(token.allowance(&admin, &spender), 40);
+    assert_eq!(env.events().all().events().len(), 0);
+}
