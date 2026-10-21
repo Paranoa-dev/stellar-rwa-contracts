@@ -109,3 +109,27 @@ fn test_allowance_emits_no_event_but_approve_does() {
     assert_eq!(token.allowance(&admin, &spender), 40);
     assert_eq!(env.events().all().events().len(), 0);
 }
+
+/// Resource baseline: `allowance` is a single temporary-storage read, so it
+/// must stay cheap. Bounds are generous ceilings (not exact values) to flag
+/// regressions without being brittle across SDK upgrades.
+#[test]
+fn test_allowance_resource_cost_baseline() {
+    let (env, token, admin) = setup();
+    let spender = Address::generate(&env);
+    token.approve(&admin, &spender, &100, &(env.ledger().sequence() + 100));
+
+    env.cost_estimate().budget().reset_default();
+    assert_eq!(token.allowance(&admin, &spender), 100);
+    let cpu_hit = env.cost_estimate().budget().cpu_instruction_cost();
+    let mem_hit = env.cost_estimate().budget().memory_bytes_cost();
+
+    let other = Address::generate(&env);
+    env.cost_estimate().budget().reset_default();
+    assert_eq!(token.allowance(&admin, &other), 0);
+    let cpu_miss = env.cost_estimate().budget().cpu_instruction_cost();
+
+    assert!(cpu_hit > 0 && cpu_hit < 5_000_000, "cpu_hit={cpu_hit}");
+    assert!(mem_hit < 1_000_000, "mem_hit={mem_hit}");
+    assert!(cpu_miss < 5_000_000, "cpu_miss={cpu_miss}");
+}
