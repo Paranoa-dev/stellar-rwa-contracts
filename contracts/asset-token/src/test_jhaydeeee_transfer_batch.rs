@@ -117,3 +117,68 @@ fn test_transfer_batch_negative_amount_rejected() {
     batch.push_back((bob, -1));
     assert!(c.token.try_transfer_batch(&c.admin, &batch).is_err());
 }
+
+// ---- issue #526: unauthorised / unprivileged caller ----
+
+/// `transfer_batch` is deliberately open to any compliant token holder: it
+/// requires no admin or guardian role, only that `from` authorises the call
+/// and moves its own balance. An ordinary holder can batch-send.
+#[test]
+fn test_transfer_batch_open_to_unprivileged_compliant_holder() {
+    let c = ctx(1_000);
+    let alice = approved(&c);
+    let bob = approved(&c);
+    c.token.mint(&c.admin, &alice, &500);
+    let mut batch: Vec<(Address, i128)> = Vec::new(&c.env);
+    batch.push_back((bob.clone(), 200));
+    c.token.transfer_batch(&alice, &batch);
+    assert_eq!(c.token.balance(&alice), 300);
+    assert_eq!(c.token.balance(&bob), 200);
+    // Admin balance is untouched: the caller can only spend its own funds.
+    assert_eq!(c.token.balance(&c.admin), 1_000);
+}
+
+/// The call is authorised against `from`, never against the admin.
+#[test]
+fn test_transfer_batch_requires_auth_of_from() {
+    let c = ctx(1_000);
+    let alice = approved(&c);
+    let bob = approved(&c);
+    c.token.mint(&c.admin, &alice, &50);
+    let mut batch: Vec<(Address, i128)> = Vec::new(&c.env);
+    batch.push_back((bob, 10));
+    c.token.transfer_batch(&alice, &batch);
+    let auths = c.env.auths();
+    assert_eq!(auths.len(), 1);
+    assert_eq!(auths.get(0).unwrap().0, alice);
+}
+
+/// A caller outside the compliance allowlist is rejected (#7), even if it
+/// holds a balance.
+#[test]
+fn test_transfer_batch_noncompliant_caller_rejected() {
+    let c = ctx(1_000);
+    let alice = approved(&c);
+    let bob = approved(&c);
+    c.token.mint(&c.admin, &alice, &50);
+    c.compliance.suspend(&c.admin, &alice);
+    let mut batch: Vec<(Address, i128)> = Vec::new(&c.env);
+    batch.push_back((bob.clone(), 10));
+    assert!(c.token.try_transfer_batch(&alice, &batch).is_err());
+    assert_eq!(c.token.balance(&alice), 50);
+    assert_eq!(c.token.balance(&bob), 0);
+}
+
+/// A compliant caller with no balance cannot draw on anyone else's funds:
+/// the batch reverts with `InsufficientBalance` (#4).
+#[test]
+fn test_transfer_batch_caller_cannot_spend_others_balance() {
+    let c = ctx(1_000);
+    let alice = approved(&c);
+    let bob = approved(&c);
+    let mut batch: Vec<(Address, i128)> = Vec::new(&c.env);
+    batch.push_back((bob.clone(), 1));
+    assert!(c.token.try_transfer_batch(&alice, &batch).is_err());
+    assert_eq!(c.token.balance(&c.admin), 1_000);
+    assert_eq!(c.token.balance(&bob), 0);
+}
