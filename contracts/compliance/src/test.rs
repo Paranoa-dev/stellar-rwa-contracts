@@ -1600,6 +1600,50 @@ fn test_set_min_holding_period_non_admin_rejected() {
     client.set_min_holding_period(&impostor, &user, &100u64);
 }
 
+/// Issue #516: `set_min_holding_period` is admin-gated.  An address with no
+/// special authority must be rejected with `Error::Unauthorized (#5)` and must
+/// not be able to mutate the stored holding period.
+#[test]
+fn test_set_min_holding_period_unauthorized_caller_rejected() {
+    let (env, client, admin) = setup();
+    let user = Address::generate(&env);
+    let us = String::from_str(&env, "US");
+    client.add_to_allowlist(&admin, &user, &us, &0);
+
+    // Establish a known-good value set by the real admin.
+    client.set_min_holding_period(&admin, &user, &100u64);
+    assert_eq!(client.get_min_holding_period(&user), Some(100u64));
+
+    // An unprivileged caller must be rejected, not silently accepted.
+    let impostor = Address::generate(&env);
+    assert_eq!(
+        client.try_set_min_holding_period(&impostor, &user, &999u64),
+        Err(Ok(Error::Unauthorized.into()))
+    );
+
+    // The stored value must be unchanged by the failed attempt.
+    assert_eq!(client.get_min_holding_period(&user), Some(100u64));
+}
+
+/// Issue #517: `set_min_holding_period` with a zero value is the documented
+/// way to *clear* a holding period.  It is accepted (not rejected) and the
+/// stored value reads back as `None`, meaning no restriction applies.
+#[test]
+fn test_set_min_holding_period_zero_clears_restriction() {
+    let (env, client, admin) = setup();
+    let user = Address::generate(&env);
+    let us = String::from_str(&env, "US");
+    client.add_to_allowlist(&admin, &user, &us, &0);
+
+    // Set a non-zero period first so the clear is observable.
+    client.set_min_holding_period(&admin, &user, &100u64);
+    assert_eq!(client.get_min_holding_period(&user), Some(100u64));
+
+    // Zero is a deliberate "clear" input, not an accidental no-op or error.
+    client.set_min_holding_period(&admin, &user, &0u64);
+    assert_eq!(client.get_min_holding_period(&user), None);
+}
+
 #[test]
 #[should_panic(expected = "Error(Contract, #5)")]
 fn test_record_acquisition_non_admin_rejected() {
