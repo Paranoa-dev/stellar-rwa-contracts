@@ -97,3 +97,49 @@ fn test_approve_while_paused_does_not_change_allowance() {
     assert!(r.is_err());
     assert_eq!(c.token.allowance(&c.owner, &c.spender), 200);
 }
+
+// ---- unauthorised caller (issue #541) ----
+
+/// `transfer_from` is gated only by allowance: a caller with no allowance
+/// from `from` is rejected with `InsufficientAllowance`.
+#[test]
+#[should_panic(expected = "Error(Contract, #13)")]
+fn test_transfer_from_no_allowance_rejected() {
+    let c = ctx();
+    let stranger = Address::generate(&c.env);
+    c.token.transfer_from(&stranger, &c.owner, &c.to, &1);
+}
+
+/// An allowance granted to one spender is not usable by another address.
+#[test]
+fn test_transfer_from_allowance_not_transferable_between_spenders() {
+    let c = ctx();
+    let stranger = Address::generate(&c.env);
+    assert_eq!(c.token.allowance(&c.owner, &stranger), 0);
+    assert!(c
+        .token
+        .try_transfer_from(&stranger, &c.owner, &c.to, &1)
+        .is_err());
+    assert_eq!(c.token.balance(&c.owner), 500);
+    assert_eq!(c.token.allowance(&c.owner, &c.spender), 200);
+}
+
+/// The spender needs no compliance approval and no admin role: it is never
+/// allowlisted here yet a transfer_from succeeds (documented behaviour).
+#[test]
+fn test_transfer_from_spender_needs_no_special_authority() {
+    let c = ctx();
+    c.token.transfer_from(&c.spender, &c.owner, &c.to, &10);
+    assert_eq!(c.token.balance(&c.to), 10);
+}
+
+/// Without the spender's authorization the call is rejected.
+#[test]
+fn test_transfer_from_requires_spender_auth() {
+    let env = Env::default();
+    let token_id = env.register(AssetTokenContract, ());
+    let token = AssetTokenContractClient::new(&env, &token_id);
+    let a = Address::generate(&env);
+    // No mock_all_auths and not initialized: require_auth fails first.
+    assert!(token.try_transfer_from(&a, &a, &a, &1).is_err());
+}
