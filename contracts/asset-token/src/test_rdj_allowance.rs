@@ -40,10 +40,7 @@ fn test_allowance_unprivileged_caller_can_read_without_auth() {
     let spender = Address::generate(&env);
     token.approve(&admin, &spender, &250, &(env.ledger().sequence() + 100));
 
-    // Fresh env handle semantics: calling a view needs no require_auth, so the
-    // call records no authorization at all.
-    let stranger = Address::generate(&env);
-    let _ = stranger;
+    // A view needs no require_auth, so the call records no authorization.
     assert_eq!(token.allowance(&admin, &spender), 250);
     assert!(env.auths().is_empty());
 }
@@ -57,5 +54,42 @@ fn test_allowance_unknown_pair_reads_zero_and_does_not_mutate() {
     let stranger = Address::generate(&env);
     assert_eq!(token.allowance(&stranger, &spender), 0);
     assert_eq!(token.allowance(&admin, &stranger), 0);
+    assert_eq!(token.allowance(&admin, &spender), 0);
+}
+
+/// Zero/minimal input: a never-approved pair, an explicit zero approval and a
+/// zero approval with a past expiry all read as 0. `allowance` itself takes no
+/// amount, so these are its minimal-input states (deliberate: it never errors).
+#[test]
+fn test_allowance_zero_and_minimal_inputs_read_zero() {
+    let (env, token, admin) = setup();
+    let spender = Address::generate(&env);
+    assert_eq!(token.allowance(&admin, &spender), 0);
+
+    token.approve(&admin, &spender, &100, &(env.ledger().sequence() + 50));
+    assert_eq!(token.allowance(&admin, &spender), 100);
+
+    // amount == 0 clears the allowance regardless of expiration_ledger.
+    token.approve(&admin, &spender, &0, &0);
+    assert_eq!(token.allowance(&admin, &spender), 0);
+}
+
+/// Owner == spender is not special-cased: it reads as zero until approved.
+#[test]
+fn test_allowance_self_pair_reads_zero() {
+    let (_env, token, admin) = setup();
+    assert_eq!(token.allowance(&admin, &admin), 0);
+}
+
+/// Expiry boundary: valid through `expiration_ledger` inclusive, zero after.
+#[test]
+fn test_allowance_expiry_boundary_inclusive() {
+    let (env, token, admin) = setup();
+    let spender = Address::generate(&env);
+    let exp = env.ledger().sequence() + 10;
+    token.approve(&admin, &spender, &7, &exp);
+    env.ledger().set_sequence_number(exp);
+    assert_eq!(token.allowance(&admin, &spender), 7);
+    env.ledger().set_sequence_number(exp + 1);
     assert_eq!(token.allowance(&admin, &spender), 0);
 }
