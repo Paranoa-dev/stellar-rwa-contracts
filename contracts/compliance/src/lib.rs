@@ -144,6 +144,8 @@ pub enum Error {
 const DAY_IN_LEDGERS: u32 = 17_280; // ~5s ledgers
 const INSTANCE_BUMP_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
 const INSTANCE_LIFETIME_THRESHOLD: u32 = INSTANCE_BUMP_AMOUNT - DAY_IN_LEDGERS;
+#[cfg(test)]
+mod test_jhaydeeee_record_acquisition;
 
 /// Contract ABI/behavior version. Bump on any change to storage layout or
 /// externally observable behavior so clients and the indexer can detect it.
