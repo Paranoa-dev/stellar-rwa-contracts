@@ -1186,9 +1186,28 @@ impl ComplianceContract {
     /// permitted to transfer. The clock starts when `record_acquisition` is
     /// first called for the holder; subsequent top-ups do not reset it.
     ///
-    /// Admin only. Emits `minhld` with `(holder, min_ledgers)`.
+    /// # Authority
+    /// `admin` must be the stored admin and must sign the transaction
+    /// (`admin.require_auth()`). Any other caller — including one that signs
+    /// the transaction but is not the stored admin — is rejected with
+    /// [`Error::Unauthorized`]. This entry point is **not** open to arbitrary
+    /// callers (issue #516).
     ///
-    /// Errors: `Unauthorized (#5)`, `NotInitialized (#2)`.
+    /// # Zero input (issue #517)
+    /// `min_ledgers = 0` is deliberately accepted and means "no minimum
+    /// holding period": the stored requirement for `holder` is removed
+    /// entirely (rather than stored as a zero value), so
+    /// [`Self::get_min_holding_period`] returns `None` afterwards and
+    /// [`Self::is_allowed`] imposes no holding-period check. The `minhld`
+    /// event is still emitted with `min_ledgers = 0` so indexers observe the
+    /// clearing. This is intentional, not an accidental side effect.
+    ///
+    /// # Errors
+    /// - [`Error::NotInitialized`] — contract not yet initialized.
+    /// - [`Error::Unauthorized`] — `admin` does not match the stored admin.
+    ///
+    /// # Events
+    /// Emits topic `("minhld", holder)` with data `min_ledgers`.
     pub fn set_min_holding_period(
         env: Env,
         admin: Address,
