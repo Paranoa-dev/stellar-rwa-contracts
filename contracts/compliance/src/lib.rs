@@ -1226,7 +1226,26 @@ impl ComplianceContract {
     /// attempted; if the record is absent, `is_allowed` treats the holding
     /// period as already satisfied (fail-open for backwards compatibility).
     ///
-    /// Admin only. Emits `acquired` with `(holder, ledger)`.
+    /// # Events
+    ///
+    /// Emits `acquired` with `(holder, ledger)` on the **first call only**
+    /// — the call that actually writes `FirstAcquiredLedger`. A repeat
+    /// (idempotent) call makes no state change and emits no event, so
+    /// indexers are not fed duplicate acquisition records (issue #523).
+    ///
+    /// # Minimal / zero-input behaviour (issue #522)
+    ///
+    /// This function takes only `(admin, holder)` — there is no amount or
+    /// list parameter. The minimal input is a freshly generated address
+    /// with no prior state in this contract (no `FirstAcquiredLedger` entry,
+    /// no KYC record, no holding period). Calling it with such an address
+    /// succeeds unconditionally: it records the current ledger and emits
+    /// the `acquired` event. There is no minimum-balance or
+    /// pre-existing-record requirement — the function is deliberately
+    /// designed to be called for any address the admin authorises,
+    /// regardless of prior history.
+    ///
+    /// Admin only.
     ///
     /// Errors: `Unauthorized (#5)`, `NotInitialized (#2)`.
     pub fn record_acquisition(env: Env, admin: Address, holder: Address) {
