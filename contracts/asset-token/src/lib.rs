@@ -122,6 +122,8 @@ const INSTANCE_LIFETIME_THRESHOLD: u32 = INSTANCE_BUMP_AMOUNT - DAY_IN_LEDGERS;
 /// compare against.
 const MAX_VALUATION_CHANGE_BPS: i128 = 5_000;
 const BPS_DENOMINATOR: i128 = 10_000;
+#[cfg(test)]
+mod test_jhaydeeee_transfer_batch;
 
 /// Contract ABI/behavior version. Bump on any change to storage layout or
 /// externally observable behavior so clients and the indexer can detect it.
